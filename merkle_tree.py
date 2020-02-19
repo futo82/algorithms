@@ -9,11 +9,15 @@ class Branch(enum.Enum):
 
 
 class Node:
-    def __init__(self, hash_value):
+    def __init__(self, hash_value, data_value=None):
         self.hash_value = hash_value
+        self.data_value = data_value
         self.parent = None
         self.left_child = None
         self.right_child = None
+
+    def is_leaf(self):
+        return self.left_child is None and self.right_child is None
 
 
 class MerkleTree:
@@ -37,19 +41,17 @@ class MerkleTree:
             trail.append((node.parent.left_child.hash_value, Branch.left))
         return self.generate_audit_trail(node.parent, trail)
 
-
-class MerkleTreeBuilder:
     @staticmethod
     def build_tree(data_chunks):
-        leaves = MerkleTreeBuilder.build_leaves(data_chunks)
-        root_node = MerkleTreeBuilder.build_parents(leaves)
+        leaves = MerkleTree.build_leaves(data_chunks)
+        root_node = MerkleTree.build_parents(leaves)
         return MerkleTree(root_node, leaves)
 
     @staticmethod
     def build_leaves(data_chunks):
         leaves = []
         for chunk in data_chunks:
-            node = Node(compute_hash(chunk))
+            node = Node(compute_hash(chunk), chunk)
             leaves.append(node)
         return leaves
 
@@ -69,7 +71,7 @@ class MerkleTreeBuilder:
             left_child.parent, right_child.parent = parent, parent
             parents.append(parent)
             i += 2
-        return MerkleTreeBuilder.build_parents(parents)
+        return MerkleTree.build_parents(parents)
 
 
 def chunk_data(data):
@@ -83,7 +85,10 @@ def compute_hash(data):
 def print_tree(node, indent=0):
     if node is None:
         return
-    print((' ' * indent) + node.hash_value)
+    if node.is_leaf():
+        print((' ' * indent) + node.data_value + " - " + node.hash_value)
+    else:
+        print((' ' * indent) + node.hash_value)
     indent += 2
     print_tree(node.left_child, indent)
     print_tree(node.right_child, indent)
@@ -101,27 +106,27 @@ def merkle_proof(root_hash, leaf_hash, trail):
 
 # Build the Merkle Tree data structure from the bottom-up.
 # The data is chunked into words.
-data = 'The quick brown fox jumps over the lazy dog'
-merkle_tree = MerkleTreeBuilder.build_tree(chunk_data(data))
+data = 'The quick brown fox jumps over the lazy dog who was sleeping under the oak tree'
+merkle_tree = MerkleTree.build_tree(chunk_data(data))
 
 print("> Printing the Merkle Tree ...")
 print_tree(merkle_tree.root_node)
 print()
 
-data_verification_hash = compute_hash("jumps")
-trusted_root_hash = '82b3b1a093c546b0f557bc21c8ca0037ff3257811e59b4914f6f0d75710de66b'
+data_verification_hash = compute_hash("brown")
+trusted_root_hash = 'bfddffb24e5f62ca7b157da0d88ed012545de73e1d3a5a5cc12838259cdc8109'
 
-print("> Obtaining the audit trial for the data chunk 'jumps' ...")
+print("> Obtaining the audit trail for the data chunk 'brown' ...")
 audit_trail = merkle_tree.get_audit_trail(data_verification_hash)
 print(audit_trail, "\n")
 
-print("> Verifying the data chunk 'jumps' against the root hash from a trusted source ...")
+print("> Verifying the data chunk 'brown' against the root hash from a trusted source ...")
 if merkle_proof(trusted_root_hash, data_verification_hash, audit_trail):
     print("Data chunk verified successfully!", "\n")
 else:
     print("Data chunk failed verification!", "\n")
 
-print("> Verifying the correupted data chunk 'jimp5' against the root hash from a trusted source ...")
+print("> Verifying the corrupted data chunk 'jimp5' against the root hash from a trusted source ...")
 data_verification_hash = compute_hash("jimp5")
 if merkle_proof(trusted_root_hash, data_verification_hash, audit_trail):
     print("Data chunk verified successfully!", "\n")
